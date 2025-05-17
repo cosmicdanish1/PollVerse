@@ -3,9 +3,7 @@ import {
   collection,
   setDoc,
   getDocs,
-  doc,
-  query,
-  where
+  doc
 } from "firebase/firestore";
 import { db } from "./firebase/config";
 import { v4 as uuidv4 } from "uuid";

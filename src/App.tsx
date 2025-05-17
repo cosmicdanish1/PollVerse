@@ -1,7 +1,6 @@
 // src/App.tsx
 import React, { useEffect, useState } from "react";
 import CreatePoll from "./CreatePoll";
-import VoteChart from "./VoteChart";
 import { subscribeToPollOptions, submitVote } from "./firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 
