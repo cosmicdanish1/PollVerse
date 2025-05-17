@@ -12,15 +12,6 @@ interface Option {
 
 type Mode = "vote" | "create";
 
-const getAnonymousUserId = (): string => {
-  let id = localStorage.getItem("anonUserId");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("anonUserId", id);
-  }
-  return id;
-};
-
 const GitHubIcon = () => (
   <svg
     className="w-6 h-6"
@@ -56,8 +47,8 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<Option[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState<string>("");
-
-  const userId = getAnonymousUserId();
+  const [showMalpracticeWarning, setShowMalpracticeWarning] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
 
   useEffect(() => {
     // Subscribe to real-time updates
@@ -94,13 +85,19 @@ const App: React.FC = () => {
     }
 
     try {
-      await submitVote(userId, selected);
-      setMessage("✅ Vote submitted!");
-      setSelected([]);
+      const result = await submitVote(selected);
+      if (result.isMalpractice) {
+        setShowMalpracticeWarning(true);
+        setAttemptCount(result.attemptCount || 0);
+        setMessage(result.message);
+      } else {
+        setMessage(result.message);
+        setSelected([]);
+      }
     } catch (err: unknown) {
       setMessage(err instanceof Error ? err.message : "Failed to submit vote.");
-      setTimeout(() => setMessage(""), 3000);
     }
+    setTimeout(() => setMessage(""), 3000);
   };
 
   const handleModalClose = (e: React.MouseEvent) => {
@@ -140,6 +137,41 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Malpractice Warning Modal */}
+      <AnimatePresence>
+        {showMalpracticeWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowMalpracticeWarning(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Multiple Voting Detected</h2>
+              <p className="text-gray-700 mb-4">
+                This is your {attemptCount} attempt to vote from the same IP address. Multiple voting is considered malpractice and is not allowed.
+              </p>
+              <p className="text-gray-700 mb-6">
+                Please note that all voting attempts are being recorded and monitored.
+              </p>
+              <button
+                onClick={() => setShowMalpracticeWarning(false)}
+                className="w-full bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 transition-colors duration-200 font-medium"
+              >
+                I Understand
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Navigation Bar */}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

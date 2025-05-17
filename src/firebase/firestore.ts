@@ -16,6 +16,25 @@ interface Option {
   text: string;
   votes: number;
 }
+
+interface VoteResult {
+  success: boolean;
+  message: string;
+  isMalpractice: boolean;
+  attemptCount?: number;
+}
+
+// Function to get user's IP address
+async function getUserIP(): Promise<string> {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip;
+  } catch (error) {
+    console.error('Error fetching IP:', error);
+    throw new Error('Failed to get IP address');
+  }
+}
   
 const pollOptionsCollection = collection(db, "polls", "global", "options");
   
@@ -39,14 +58,31 @@ export function subscribeToPollOptions(callback: (options: Option[]) => void) {
   
 // Submit vote: increment votes for selected options and mark user voted
 export async function submitVote(
-  userId: string,
   selectedOptionIds: string[]
-): Promise<void> {
-  // Check if user already voted
-  const voterDocRef = doc(db, "polls", "global", "voters", userId);
+): Promise<VoteResult> {
+  // Get user's IP address
+  const userIP = await getUserIP();
+  
+  // Check if IP has already voted
+  const voterDocRef = doc(db, "polls", "global", "voters", userIP);
   const voterSnap = await getDoc(voterDocRef);
+  
   if (voterSnap.exists()) {
-    throw new Error("You have already voted.");
+    const voterData = voterSnap.data();
+    const attemptCount = (voterData.attemptCount || 0) + 1;
+    
+    // Update attempt count
+    await updateDoc(voterDocRef, {
+      attemptCount,
+      lastAttempt: new Date().toISOString()
+    });
+
+    return {
+      success: false,
+      message: "⚠️ Multiple voting detected! This is considered malpractice.",
+      isMalpractice: true,
+      attemptCount
+    };
   }
 
   // Update votes atomically for each selected option
@@ -57,7 +93,17 @@ export async function submitVote(
     });
   }
 
-  // Mark user voted
-  await setDoc(voterDocRef, { voted: true });
+  // Mark IP as voted
+  await setDoc(voterDocRef, { 
+    voted: true,
+    votedAt: new Date().toISOString(),
+    attemptCount: 1
+  });
+
+  return {
+    success: true,
+    message: "✅ Vote submitted successfully!",
+    isMalpractice: false
+  };
 }
   
